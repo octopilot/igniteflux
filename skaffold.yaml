@@ -7,15 +7,15 @@ metadata:
   name: igniteflux
 build:
   artifacts:
-    - image: ghcr.io/octopilot/igniteflux-base-buildcache:latest
+    - image: ghcr.io/octopilot/igniteflux-base:latest
       context: base
-      docker:
-        dockerfile: Dockerfile
+      buildpacks:
+        builder: ghcr.io/octopilot/builder-jammy-base:latest
     - image: ghcr.io/octopilot/igniteflux
       context: .
       buildpacks:
         builder: ghcr.io/octopilot/builder-jammy-base:rust-builder-ab65609
-        runImage: ghcr.io/octopilot/igniteflux-base-buildcache:latest
+        runImage: ghcr.io/octopilot/igniteflux-base:latest
         buildpacks:
           - octopilot/rust
         env:
@@ -25,4 +25,4 @@ build:
     - image: ghcr.io/octopilot/igniteflux-chart
       context: chart/chartTemplate
       buildpacks:
-        builder: ghcr.io/octopilot/builder-jammy-base:rust-builder-ab65609
+        builder: ghcr.io/octopilot/builder-jammy-base:latest
