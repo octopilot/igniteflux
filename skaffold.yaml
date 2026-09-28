@@ -15,7 +15,7 @@ build:
       context: .
       buildpacks:
         builder: ghcr.io/octopilot/builder-jammy-base:rust-builder-ab65609
-        runImage: ghcr.io/octopilot/igniteflux-base
+        runImage: ghcr.io/octopilot/igniteflux-base-buildcache:latest
         buildpacks:
           - octopilot/rust
         env:
