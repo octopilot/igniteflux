@@ -11,10 +11,10 @@ build:
       context: base
       docker:
         dockerfile: Dockerfile
-#    - image: ghcr.io/octopilot/igniteflux-chart
-#      context: chart/chartTemplate
-#      buildpacks:
-#        builder: ghcr.io/octopilot/builder-jammy-base:rust-builder-ab65609
+    - image: ghcr.io/octopilot/igniteflux-chart
+      context: chart/chartTemplate
+      buildpacks:
+        builder: ghcr.io/octopilot/builder-jammy-base:rust-builder-ab65609
 #    - image: ghcr.io/octopilot/igniteflux
 #      context: .
 #      buildpacks:
