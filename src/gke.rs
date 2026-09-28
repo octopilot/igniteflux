@@ -93,7 +93,7 @@ pub async fn client(gke: &Gke, token: &str) -> Result<kube::Client> {
             name: "target".into(),
             context: Some(KContext {
                 cluster: "target".into(),
-                user: "wi".into(),
+                user: Some("wi".into()),
                 ..Default::default()
             }),
         }],
