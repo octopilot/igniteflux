@@ -16,6 +16,12 @@ concurrency:
 jobs:
   build:
     name: Octopilot
+    # The reusable pipeline pushes images (integration to ttl.sh / GHCR) and cuts releases; a caller must grant what nested jobs request.
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+      pull-requests: write
     uses: octopilot/actions/.github/workflows/pipeline.yml@main
     with:
       integration: true
