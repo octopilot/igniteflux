@@ -1,5 +1,6 @@
-name: CI
+name: Octopilot CI
 
+# Shared reusable pipeline (octopilot/actions); skaffold.yaml is the shape source of truth (detect-contexts reads it).
 on:
   push:
     branches: [main]
@@ -8,122 +9,14 @@ on:
     branches: [main]
   workflow_dispatch:
 
-env:
-  CARGO_TERM_COLOR: always
-  RUST_BACKTRACE: 1
+concurrency:
+  group: octopilot-ci-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
 jobs:
-  detect:
-    name: Detect Contexts
-    runs-on: ubuntu-latest
-    outputs:
-      pipeline-context: ${{ steps.detect.outputs.pipeline-context }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: Detect Contexts
-        id: detect
-        uses: octopilot/actions/detect-contexts@main
-
-  lint:
-    needs: detect
-    if: toJSON(fromJson(needs.detect.outputs.pipeline-context).languages) != '[]'
-    name: Lint
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: octopilot/actions/lint@main
-        with:
-          pipeline-context: ${{ needs.detect.outputs.pipeline-context }}
-
-  test:
-    needs: detect
-    if: toJSON(fromJson(needs.detect.outputs.pipeline-context).matrix) != '[]'
-    name: Test
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include: ${{ fromJson(needs.detect.outputs.pipeline-context).matrix }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: octopilot/actions/test@main
-        with:
-          pipeline-context: ${{ toJson(matrix) }}
-
-  # Build the binary once, smoke it (no cluster: it must fail cleanly naming its config path), mint a ttl.sh UUID.
-  integration-validate:
-    name: Integration (validate)
-    needs: [detect, lint, test]
-    runs-on: ubuntu-latest
-    outputs:
-      uuid: ${{ steps.validate.outputs.uuid }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: Validate primary build and generate UUID
-        id: validate
-        uses: octopilot/actions/integration-validate@main
-        with:
-          pipeline-context: ${{ needs.detect.outputs.pipeline-context }}
-          smoke-binary-path: target/release/igniteflux
-          smoke-expect-pattern: config.yaml
-
-  # Image (Dockerfile: the runtime needs git and kustomize) and chart, pushed to ttl.sh for the PR.
-  integration-artifacts:
-    name: Integration (${{ matrix.suffix || matrix.output_key }})
-    needs: [detect, integration-validate]
-    if: toJSON(fromJson(needs.detect.outputs.pipeline-context).integration_matrix) != '[]'
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include: ${{ fromJson(needs.detect.outputs.pipeline-context).integration_matrix }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: Build and push artifact
-        id: build
-        uses: octopilot/actions/integration-build-artifact@main
-        with:
-          artifact: ${{ toJson(matrix) }}
-          ttl-uuid: ${{ needs.integration-validate.outputs.uuid }}
-          op_version: v1.0.17
-      - name: Upload artifact outputs
-        run: |
-          mkdir -p artifact-out
-          mv outputs.txt "artifact-out/${{ matrix.output_key }}.txt" 2>/dev/null || true
-          [ -f build_result.json ] && cp build_result.json artifact-out/ || true
-      - uses: actions/upload-artifact@v4
-        with:
-          name: integration-${{ matrix.output_key }}
-          path: artifact-out
-          retention-days: 1
-
-  # Deploy the chart into Kind with the PR image and check the controller starts and watches its targets.
-  integration-deploy:
-    name: Integration (deploy)
-    needs: integration-artifacts
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: integration-*
-          path: artifact-outputs
-      - uses: octopilot/actions/merge-build-results@main
-        with:
-          directory: artifact-outputs
-          output-path: build_result.json
-      - name: Kind
-        uses: helm/kind-action@v1
-      - name: Deploy and verify
-        run: |
-          set -e
-          IMAGE="$(jq -r '.builds[] | select(.imageName | test("igniteflux$")) | .tag' build_result.json | head -1)"
-          echo "image: $IMAGE"
-          REPO="${IMAGE%%:*}"; TAG="${IMAGE#*:}"; TAG="${TAG%%@*}"
-          kubectl create namespace crossplane-system
-          # the claim CRDs the controller watches, minimal, so the watch can start
-          kubectl apply -f tests/integration/crds.yaml
-          kubectl -n crossplane-system create secret generic igniteflux-github-app --from-literal=githubAppID=1 --from-literal=githubAppInstallationID=1 --from-literal=githubAppPrivateKey=x
-          helm install igniteflux chart/chartTemplate -n crossplane-system --set image.repository="$REPO" --set image.tag="$TAG" --wait --timeout 120s
-          kubectl -n crossplane-system logs deploy/igniteflux --tail=20
-          kubectl -n crossplane-system logs deploy/igniteflux | grep -q 'igniteflux starting'
+  build:
+    name: Octopilot
+    uses: octopilot/actions/.github/workflows/pipeline.yml@main
+    with:
+      integration: true
+      integration_max_parallel: 4
