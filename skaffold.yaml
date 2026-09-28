@@ -7,17 +7,15 @@ metadata:
   name: igniteflux
 build:
   artifacts:
-    - image: ghcr.io/octopilot/igniteflux-base:latest
+    - image: igniteflux-base
       context: base
-      buildpacks:
-        builder: ghcr.io/octopilot/builder-jammy-base:latest
+      docker:
+        dockerfile: Dockerfile
     - image: ghcr.io/octopilot/igniteflux
       context: .
       buildpacks:
-        builder: ghcr.io/octopilot/builder-jammy-base:rust-builder-ab65609
-        runImage: ghcr.io/octopilot/igniteflux-base:latest
-        buildpacks:
-          - octopilot/rust
+        builder: ghcr.io/octopilot/builder-jammy-base:rust-builder-d5eb42a
+        runImage: igniteflux-base
         env:
           - BP_RUST_BINARY_NAME=igniteflux
           - BP_TEST_COMMAND=./hack/test-unit.sh
