@@ -1,0 +1,16 @@
+# igniteflux configuration. Watch claims; when one is Ready and its cluster is RUNNING, install Flux into that cluster from the
+# named directory of the Git checkout and seed the GitHub App credential so the new cluster reconciles itself from then on.
+git:
+  repository: microscaler/gcp-infrastructure
+  branch: main
+  app_secret: igniteflux-github-app        # in the controller's namespace: githubAppID, githubAppInstallationID, githubAppPrivateKey
+targets:
+  - api_version: platform.pricewhisperer.ai/v1alpha1
+    kind: HubCluster
+    cluster: { provider: gke, project: =pw-ctl, location: =us-east4, name: =hub }
+    path: clusters/hub/flux-system
+  - api_version: platform.pricewhisperer.ai/v1alpha1
+    kind: RuntimeEnvironment
+    cluster: { provider: gke, project: /spec/projectId, location: /spec/region, name: "=runtime-{env}" }
+    env_field: /spec/environment
+    path: clusters/runtime/{env}/flux-system
