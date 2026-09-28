@@ -2,6 +2,10 @@
 # Built by op as a docker artifact and used as runImage by the buildpack artifact.
 FROM ghcr.io/octopilot/op-base:v1.1.2
 
+# Explicit PATH: the CNB launcher takes the final PATH from the run image config; without this the launched process had
+# PATH=/cnb/process:/cnb/lifecycle: and failed with: failed to launch: bash exec: no such file or directory.
+ENV PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     curl \
