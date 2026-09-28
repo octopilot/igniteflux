@@ -1,14 +1,22 @@
-# builder-jammy-base tag must exist on GHCR; use a version tag for CI (e.g. 0.1.198).
+# Run image first (docker artifact, adds git + kustomize), then the binary on top of it (buildpack, runImage): the
+# octopilot-pipeline-tools pattern. builder-jammy-base tag must exist on GHCR.
 apiVersion: skaffold/v4beta7
 kind: Config
 metadata:
   name: igniteflux
 build:
   artifacts:
+    - image: ghcr.io/octopilot/igniteflux-base
+      context: base
+      docker:
+        dockerfile: Dockerfile
     - image: ghcr.io/octopilot/igniteflux
       context: .
       buildpacks:
         builder: ghcr.io/octopilot/builder-jammy-base:latest
+        runImage: ghcr.io/octopilot/igniteflux-base
+        env:
+          - BP_RUST_BINARY_NAME=igniteflux
     - image: ghcr.io/octopilot/igniteflux-chart
       context: chart/chartTemplate
       buildpacks:
