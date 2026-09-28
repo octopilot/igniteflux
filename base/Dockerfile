@@ -1,6 +1,6 @@
 # Run image for igniteflux (the octopilot-pipeline-tools base pattern): ubuntu:jammy plus git (checkout) and kustomize (render).
 # Built by op as a docker artifact and used as runImage by the buildpack artifact.
-FROM ubuntu:jammy
+FROM ghcr.io/octopilot/op-base:v1.1.2
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
