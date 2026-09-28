@@ -1,14 +1,14 @@
+# builder-jammy-base tag must exist on GHCR; use a version tag for CI (e.g. 0.1.198).
 apiVersion: skaffold/v4beta7
 kind: Config
 metadata:
   name: igniteflux
 build:
   artifacts:
-    # Dockerfile, not the Rust buildpack: the runtime image needs git and kustomize next to the binary.
     - image: ghcr.io/octopilot/igniteflux
       context: .
-      docker:
-        dockerfile: Dockerfile
+      buildpacks:
+        builder: ghcr.io/octopilot/builder-jammy-base:latest
     - image: ghcr.io/octopilot/igniteflux-chart
       context: chart/chartTemplate
       buildpacks:
