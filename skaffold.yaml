@@ -1,6 +1,6 @@
 # Octopilot shape source of truth (detect-contexts reads this).
-# Run image first (docker artifact: buildpack run image + git + kustomize), then the binary on top of it via the rust
-# buildpack with runImage: the octopilot-pipeline-tools pattern. Test leg: hack/test-unit.sh.
+# Run image first (docker artifact: ubuntu + git + kustomize), then the binary on top of it via the rust buildpack with
+# runImage (the octopilot-pipeline-tools pattern), then the chart. Test leg: hack/test-unit.sh.
 apiVersion: skaffold/v4beta7
 kind: Config
 metadata:
@@ -11,18 +11,18 @@ build:
       context: base
       docker:
         dockerfile: Dockerfile
+    - image: ghcr.io/octopilot/igniteflux
+      context: .
+      buildpacks:
+        builder: ghcr.io/octopilot/builder-jammy-base:rust-builder-ab65609
+        runImage: ghcr.io/octopilot/igniteflux-base
+        buildpacks:
+          - octopilot/rust
+        env:
+          - BP_RUST_BINARY_NAME=igniteflux
+          - BP_TEST_COMMAND=./hack/test-unit.sh
+          - BP_TEST_LABEL=unit
     - image: ghcr.io/octopilot/igniteflux-chart
       context: chart/chartTemplate
       buildpacks:
         builder: ghcr.io/octopilot/builder-jammy-base:rust-builder-ab65609
-#    - image: ghcr.io/octopilot/igniteflux
-#      context: .
-#      buildpacks:
-#        builder: ghcr.io/octopilot/builder-jammy-base:rust-builder-ab65609
-#        runImage: ghcr.io/octopilot/igniteflux-base
-#        buildpacks:
-#          - octopilot/rust
-#        env:
-#          - BP_RUST_BINARY_NAME=igniteflux
-#          - BP_TEST_COMMAND=./hack/test-unit.sh
-#          - BP_TEST_LABEL=unit

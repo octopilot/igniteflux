@@ -1,0 +1,13 @@
+# Kind overlay: local registry (insecure: true).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../deployment
+patches:
+  - target:
+      kind: OCIRepository
+      name: igniteflux-chart
+    patch: |
+      - op: replace
+        path: /spec/insecure
+        value: true

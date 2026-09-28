@@ -1,6 +1,7 @@
 image:
   repository: ghcr.io/octopilot/igniteflux
   tag: ""            # defaults to the chart appVersion
+  ref: ""            # full reference (repo:tag@digest) overriding repository/tag; CI passes the built image this way
   pullPolicy: IfNotPresent
 
 # ServiceAccount to run as. On GKE this should carry the Workload Identity that may describe and administer the target clusters.

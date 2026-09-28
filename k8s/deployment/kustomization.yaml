@@ -1,0 +1,8 @@
+# Base deployment: Flux OCIRepository + HelmRelease for igniteflux.
+# CI substitutes CHART_OCI_URL, CHART_REF_TYPE, CHART_REF_VALUE and IMG_igniteflux before apply.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - ocirepository.yaml
+  - helmrelease.yaml

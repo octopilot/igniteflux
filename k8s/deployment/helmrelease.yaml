@@ -1,0 +1,29 @@
+# Helm release for igniteflux. IMG_igniteflux (repo:tag@digest) is substituted by CI or flux_deploy.
+# In CI there is no Crossplane and no cloud: the controller starts, its watches wait for the claim CRDs, and the
+# pipeline checks the release reconciles and the pod runs. Real targets come from the platform's values.
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: igniteflux
+  namespace: igniteflux
+spec:
+  interval: 5m
+  chartRef:
+    kind: OCIRepository
+    name: igniteflux-chart
+    namespace: igniteflux
+  releaseName: igniteflux
+  targetNamespace: igniteflux
+  install:
+    createNamespace: true
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+  values:
+    image:
+      ref: ${IMG_igniteflux}
+      pullPolicy: Always
+    serviceAccount:
+      create: true

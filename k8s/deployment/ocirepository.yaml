@@ -1,0 +1,13 @@
+# OCI chart source. Substituted by CI/Tilt: CHART_OCI_URL, CHART_REF_TYPE (digest|tag), CHART_REF_VALUE.
+# Env overlays patch spec.insecure: k8s/env/ci (false, ttl.sh/GHCR), k8s/env/kind (true, local registry).
+apiVersion: source.toolkit.fluxcd.io/v1
+kind: OCIRepository
+metadata:
+  name: igniteflux-chart
+  namespace: igniteflux
+spec:
+  interval: 5m
+  url: oci://${CHART_OCI_URL}
+  ref:
+    ${CHART_REF_TYPE}: "${CHART_REF_VALUE}"
+  insecure: false
