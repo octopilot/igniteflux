@@ -18,7 +18,7 @@ to force a run. Nothing Flux-specific is embedded: the manifests come from your 
 you vendored, and upgrades are a Git change.
 
 Runs as a Deployment where the claims live, under a ServiceAccount whose cloud identity may describe and administer the
-target clusters. Configuration is one YAML file (`config/example.yaml`); `deploy/` has a manifest.
+target clusters. Configuration is one YAML file (`config/example.yaml`); `chart/chartTemplate` deploys it (see `values.yaml`).
 
 ## Status
 

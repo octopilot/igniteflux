@@ -23,7 +23,9 @@ pub struct Target {
     pub env_field: Option<String>,
 }
 
-fn default_ready() -> String { "Ready".into() }
+fn default_ready() -> String {
+    "Ready".into()
+}
 
 /// How to find and authenticate to the target cluster.
 #[derive(Debug, Clone, Deserialize)]
@@ -49,8 +51,12 @@ pub struct Git {
     #[serde(default = "default_secret")]
     pub app_secret: String,
 }
-fn default_branch() -> String { "main".into() }
-fn default_secret() -> String { "igniteflux-github-app".into() }
+fn default_branch() -> String {
+    "main".into()
+}
+fn default_secret() -> String {
+    "igniteflux-github-app".into()
+}
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct Config {
@@ -60,11 +66,14 @@ pub struct Config {
     #[serde(default = "default_workdir")]
     pub workdir: String,
 }
-fn default_workdir() -> String { "/var/lib/igniteflux/repo".into() }
+fn default_workdir() -> String {
+    "/var/lib/igniteflux/repo".into()
+}
 
 impl Config {
     pub fn load(path: impl AsRef<Path>) -> Result<Self> {
-        let text = std::fs::read_to_string(path.as_ref()).with_context(|| format!("reading {}", path.as_ref().display()))?;
+        let text = std::fs::read_to_string(path.as_ref())
+            .with_context(|| format!("reading {}", path.as_ref().display()))?;
         Ok(serde_yaml::from_str(&text)?)
     }
 }
@@ -74,7 +83,9 @@ pub fn resolve(spec: &str, claim: &serde_json::Value) -> Result<String> {
     if let Some(lit) = spec.strip_prefix('=') {
         return Ok(lit.to_string());
     }
-    let v = claim.pointer(spec).with_context(|| format!("claim has no field {spec}"))?;
+    let v = claim
+        .pointer(spec)
+        .with_context(|| format!("claim has no field {spec}"))?;
     Ok(match v {
         serde_json::Value::String(s) => s.clone(),
         other => other.to_string().trim_matches('"').to_string(),

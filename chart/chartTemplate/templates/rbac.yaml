@@ -1,0 +1,25 @@
+{{- if .Values.serviceAccount.create }}
+apiVersion: v1
+kind: ServiceAccount
+metadata: { name: {{ include "igniteflux.name" . }}, namespace: {{ .Release.Namespace }} }
+---
+{{- end }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata: { name: {{ include "igniteflux.name" . }} }
+rules:
+  - apiGroups: {{ toJson .Values.claimApiGroups }}
+    resources: ["*"]
+    verbs: [get, list, watch, patch]
+  - apiGroups: [""]
+    resources: [secrets]
+    verbs: [get, list, watch]
+  - apiGroups: [""]
+    resources: [events]
+    verbs: [create, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata: { name: {{ include "igniteflux.name" . }} }
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: {{ include "igniteflux.name" . }} }
+subjects: [{ kind: ServiceAccount, name: {{ include "igniteflux.sa" . }}, namespace: {{ .Release.Namespace }} }]

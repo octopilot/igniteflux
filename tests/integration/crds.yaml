@@ -1,0 +1,18 @@
+# Minimal claim CRDs so the controller's watches can start in Kind. Real clusters have Crossplane's generated ones.
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata: { name: hubclusters.platform.pricewhisperer.ai }
+spec:
+  group: platform.pricewhisperer.ai
+  names: { kind: HubCluster, plural: hubclusters }
+  scope: Namespaced
+  versions: [{ name: v1alpha1, served: true, storage: true, schema: { openAPIV3Schema: { type: object, x-kubernetes-preserve-unknown-fields: true } } }]
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata: { name: runtimeenvironments.platform.pricewhisperer.ai }
+spec:
+  group: platform.pricewhisperer.ai
+  names: { kind: RuntimeEnvironment, plural: runtimeenvironments }
+  scope: Namespaced
+  versions: [{ name: v1alpha1, served: true, storage: true, schema: { openAPIV3Schema: { type: object, x-kubernetes-preserve-unknown-fields: true } } }]

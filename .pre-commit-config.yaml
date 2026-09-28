@@ -1,0 +1,33 @@
+# Install hooks: just install-hooks   (or: pre-commit install)
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: detect-private-key
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: mixed-line-ending
+        args: ['--fix', 'lf']
+      - id: check-yaml
+        exclude: '^chart/chartTemplate/'
+      - id: check-toml
+  - repo: local
+    hooks:
+      - id: helm-lint
+        name: helm lint
+        entry: bash -c 'cd chart/chartTemplate && helm lint .'
+        language: system
+        files: '^chart/chartTemplate/'
+        pass_filenames: false
+      - id: cargo-fmt-check
+        name: cargo fmt (check)
+        entry: cargo fmt --all -- --check
+        language: system
+        types: [rust]
+        pass_filenames: false
+      - id: cargo-clippy
+        name: cargo clippy
+        entry: cargo clippy --all-targets --all-features -- -D warnings
+        language: system
+        types: [rust]
+        pass_filenames: false

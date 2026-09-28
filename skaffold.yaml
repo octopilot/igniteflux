@@ -1,0 +1,15 @@
+apiVersion: skaffold/v4beta7
+kind: Config
+metadata:
+  name: igniteflux
+build:
+  artifacts:
+    # Dockerfile, not the Rust buildpack: the runtime image needs git and kustomize next to the binary.
+    - image: ghcr.io/octopilot/igniteflux
+      context: .
+      docker:
+        dockerfile: Dockerfile
+    - image: ghcr.io/octopilot/igniteflux-chart
+      context: chart/chartTemplate
+      buildpacks:
+        builder: ghcr.io/octopilot/builder-jammy-base:latest

@@ -1,0 +1,6 @@
+apiVersion: v2
+name: igniteflux
+description: Bootstraps Flux into clusters that a Kubernetes claim says exist
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

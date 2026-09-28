@@ -1,1 +1,7 @@
 target/
+tmp/
+*.pem
+*.key
+.env
+build_result.json
+outputs.txt
