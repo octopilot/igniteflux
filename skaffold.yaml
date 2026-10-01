@@ -19,7 +19,7 @@ build:
       context: .
       buildpacks:
         builder: ghcr.io/octopilot/builder-jammy-base:rust-builder-d5eb42a
-        runImage: igniteflux-base
+        runImage: ghcr.io/octopilot/igniteflux-base:latest
         env:
           - BP_RUST_BINARY_NAME=igniteflux
           - BP_TEST_COMMAND=./hack/test-unit.sh
