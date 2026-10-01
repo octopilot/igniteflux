@@ -3,4 +3,9 @@ kind: ConfigMap
 metadata: { name: {{ include "igniteflux.name" . }}, namespace: {{ .Release.Namespace }} }
 data:
   config.yaml: |
-{{ merge (dict "git" (merge (dict "app_secret" .Values.appSecret) .Values.config.git)) .Values.config | toYaml | indent 4 }}
+{{- $targets := .Values.config.targets }}
+{{- if .Values.probe.enabled }}
+{{- $probe := dict "api_version" "igniteflux.octopilot.io/v1alpha1" "kind" "BootstrapProbe" "cluster" (dict "provider" "gke" "project" "/spec/project" "location" "/spec/location" "name" "/spec/cluster") "path" "{env}" "env_field" "/spec/path" }}
+{{- $targets = append $targets $probe }}
+{{- end }}
+{{ merge (dict "git" (merge (dict "app_secret" .Values.appSecret) .Values.config.git) "targets" $targets) .Values.config | toYaml | indent 4 }}

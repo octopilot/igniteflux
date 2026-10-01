@@ -8,7 +8,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata: { name: {{ include "igniteflux.name" . }} }
 rules:
-  - apiGroups: {{ toJson .Values.claimApiGroups }}
+  - apiGroups: {{ toJson (.Values.probe.enabled | ternary (append .Values.claimApiGroups "igniteflux.octopilot.io") .Values.claimApiGroups) }}
     resources: ["*"]
     verbs: [get, list, watch, patch]
   - apiGroups: [""]

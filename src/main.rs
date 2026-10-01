@@ -11,8 +11,9 @@ use futures::StreamExt;
 use k8s_openapi::api::core::v1::Secret;
 use kube::api::{ApiResource, DynamicObject, GroupVersionKind, Patch, PatchParams};
 use kube::runtime::controller::{Action, Controller};
+use kube::runtime::events::{Event, EventType, Recorder, Reporter};
 use kube::runtime::watcher;
-use kube::{Api, Client, ResourceExt};
+use kube::{Api, Client, Resource as _, ResourceExt};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
@@ -28,6 +29,21 @@ struct Ctx {
     target: Target,
     namespace: String,
     ar: ApiResource,
+    recorder: Recorder,
+}
+
+/// Record what happened on the claim itself, so `kubectl describe` on it tells the story (and tests can watch for it).
+async fn record(ctx: &Ctx, obj: &DynamicObject, type_: EventType, reason: &str, note: String) {
+    let ev = Event {
+        type_,
+        reason: reason.to_string(),
+        note: Some(note),
+        action: "Bootstrap".to_string(),
+        secondary: None,
+    };
+    if let Err(e) = ctx.recorder.publish(&ev, &obj.object_ref(&ctx.ar)).await {
+        warn!(error = %e, "could not record event");
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -122,6 +138,14 @@ async fn reconcile(obj: Arc<DynamicObject>, ctx: Arc<Ctx>) -> Result<Action, Err
         return Ok(Action::requeue(Duration::from_secs(600)));
     }
     info!(kind = %t.kind, %name, %endpoint, rerun, "bootstrapping Flux");
+    record(
+        &ctx,
+        &obj,
+        EventType::Normal,
+        "Bootstrapping",
+        format!("installing Flux into {endpoint} from {}", t.path),
+    )
+    .await;
 
     // Git checkout as the App, rendered with kustomize
     let app = load_app(&ctx.client, &ctx.namespace, &ctx.cfg.git.app_secret).await?;
@@ -165,11 +189,26 @@ async fn reconcile(obj: Arc<DynamicObject>, ctx: Arc<Ctx>) -> Result<Action, Err
         .await
         .map_err(anyhow::Error::from)?;
     info!(kind = %t.kind, %name, %endpoint, objects = objs.len(), "Flux bootstrapped");
+    record(
+        &ctx,
+        &obj,
+        EventType::Normal,
+        "Bootstrapped",
+        format!(
+            "Flux installed into {endpoint}: {} objects applied, GitRepository Ready",
+            objs.len()
+        ),
+    )
+    .await;
     Ok(Action::requeue(Duration::from_secs(600)))
 }
 
-fn error_policy(obj: Arc<DynamicObject>, err: &Error, _ctx: Arc<Ctx>) -> Action {
+fn error_policy(obj: Arc<DynamicObject>, err: &Error, ctx: Arc<Ctx>) -> Action {
     warn!(name = %obj.name_any(), error = %err, "reconcile failed");
+    let note = err.to_string();
+    tokio::spawn(
+        async move { record(&ctx, &obj, EventType::Warning, "BootstrapFailed", note).await },
+    );
     Action::requeue(Duration::from_secs(60))
 }
 
@@ -206,6 +245,13 @@ async fn main() -> Result<()> {
             target: target.clone(),
             namespace: namespace.clone(),
             ar: ar.clone(),
+            recorder: Recorder::new(
+                client.clone(),
+                Reporter {
+                    controller: "igniteflux".into(),
+                    instance: None,
+                },
+            ),
         });
         let ctrl = Controller::new_with(api, watcher::Config::default(), ar)
             .run(reconcile, error_policy, ctx)

@@ -27,9 +27,18 @@ config:
       env_field: /spec/environment
       path: clusters/runtime/{env}/flux-system
 
-# API groups of the claim kinds above; the ClusterRole is generated from this list.
+# API groups of the claim kinds above; the ClusterRole is generated from this list (the probe group is added automatically).
 claimApiGroups:
   - platform.pricewhisperer.ai
+
+# The chart ships BootstrapProbe (crds/): a harmless kind the controller also watches, used by `helm test` and for
+# smoke-checking a live install. Disable only if you want the controller to watch nothing but your own claims.
+probe:
+  enabled: true
+
+tests:
+  # kubectl-capable image for the Helm test pod
+  image: alpine/k8s:1.33.1
 
 resources:
   requests: { cpu: 20m, memory: 64Mi }

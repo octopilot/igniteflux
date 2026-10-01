@@ -1,0 +1,75 @@
+{{- if .Values.probe.enabled }}
+# helm test: the controller must notice a Ready BootstrapProbe and act on it. The probe points at a cluster that does not
+# exist, so the expected outcome is a BootstrapFailed event (Bootstrapped on a cluster that really has it). Either event
+# proves watch, config, RBAC and the ready-gate; no event within the timeout fails the test.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "igniteflux.name" . }}-test
+  namespace: {{ .Release.Namespace }}
+  annotations: { "helm.sh/hook": test, "helm.sh/hook-weight": "-5", "helm.sh/hook-delete-policy": "before-hook-creation,hook-succeeded" }
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "igniteflux.name" . }}-test
+  namespace: {{ .Release.Namespace }}
+  annotations: { "helm.sh/hook": test, "helm.sh/hook-weight": "-5", "helm.sh/hook-delete-policy": "before-hook-creation,hook-succeeded" }
+rules:
+  - apiGroups: [igniteflux.octopilot.io]
+    resources: [bootstrapprobes]
+    verbs: [get, create, delete, patch]
+  - apiGroups: [""]
+    resources: [events]
+    verbs: [get, list]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "igniteflux.name" . }}-test
+  namespace: {{ .Release.Namespace }}
+  annotations: { "helm.sh/hook": test, "helm.sh/hook-weight": "-5", "helm.sh/hook-delete-policy": "before-hook-creation,hook-succeeded" }
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: Role, name: {{ include "igniteflux.name" . }}-test }
+subjects: [{ kind: ServiceAccount, name: {{ include "igniteflux.name" . }}-test, namespace: {{ .Release.Namespace }} }]
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "igniteflux.name" . }}-test-reconcile
+  namespace: {{ .Release.Namespace }}
+  annotations: { "helm.sh/hook": test, "helm.sh/hook-delete-policy": "before-hook-creation,hook-succeeded" }
+spec:
+  serviceAccountName: {{ include "igniteflux.name" . }}-test
+  restartPolicy: Never
+  containers:
+    - name: test
+      image: {{ .Values.tests.image }}
+      command: ["/bin/sh", "-ec"]
+      args:
+        - |
+          NS="{{ .Release.Namespace }}"; NAME="helm-test-$(date +%s)"
+          cat <<EOF | kubectl apply -f -
+          apiVersion: igniteflux.octopilot.io/v1alpha1
+          kind: BootstrapProbe
+          metadata: { name: $NAME, namespace: $NS }
+          spec: { project: no-such-project, location: nowhere, cluster: no-such-cluster, path: clusters/none/flux-system }
+          status:
+            conditions: [{ type: Ready, status: "True", reason: Probe, message: "helm test" }]
+          EOF
+          echo "probe $NAME created; waiting for the controller to act"
+          for i in $(seq 1 60); do
+            reason=$(kubectl get events -n "$NS" --field-selector involvedObject.name="$NAME",involvedObject.kind=BootstrapProbe -o jsonpath='{.items[*].reason}' 2>/dev/null)
+            case " $reason " in
+              *" Bootstrapped "*|*" BootstrapFailed "*)
+                echo "controller reacted: $reason"
+                kubectl get events -n "$NS" --field-selector involvedObject.name="$NAME" -o custom-columns=REASON:.reason,MESSAGE:.message --no-headers | head -3
+                kubectl delete bootstrapprobe "$NAME" -n "$NS" --ignore-not-found >/dev/null
+                exit 0;;
+            esac
+            sleep 2
+          done
+          echo "no Bootstrapped/BootstrapFailed event on $NAME within 120s"
+          kubectl get events -n "$NS" --sort-by=.lastTimestamp | tail -10
+          kubectl delete bootstrapprobe "$NAME" -n "$NS" --ignore-not-found >/dev/null
+          exit 1
+{{- end }}
