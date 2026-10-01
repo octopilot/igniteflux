@@ -26,5 +26,6 @@ jobs:
     with:
       integration: true
       integration_max_parallel: 4
-      # docker: artifacts need the Docker CLI in the op image (pipeline-tools#37, in op:main); drop once v1.1.3 is released.
-      op_version: main
+      # op:latest until pipeline-tools restores the op:main tag (#40 dropped the alias its own CI relied on); then back to
+      # main, and to a release tag once v1.1.3 exists.
+      op_version: latest
