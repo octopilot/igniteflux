@@ -18,10 +18,9 @@ build:
     - image: ghcr.io/octopilot/igniteflux
       context: .
       buildpacks:
-        builder: ghcr.io/octopilot/builder-jammy-base:rust-builder-d5eb42a
+        builder: ghcr.io/octopilot/builder-jammy-base:latest   # rust-builder-d5eb42a carries octopilot/rust@0.1.6, which declares no launch processes
         runImage: ghcr.io/octopilot/igniteflux-base:latest
         env:
           - BP_RUST_BINARY_NAME=igniteflux
-          - BP_DEFAULT_PROCESS=igniteflux     # declare the default process; do not rely on the buildpack aliasing the first binary as web
           - BP_TEST_COMMAND=./hack/test-unit.sh
           - BP_TEST_LABEL=unit
