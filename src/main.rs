@@ -151,12 +151,26 @@ async fn reconcile(obj: Arc<DynamicObject>, ctx: Arc<Ctx>) -> Result<Action, Err
         .get(ANN_BOOTSTRAPPED)
         .and_then(|v| v.split('@').next())
         .map(str::to_string);
-    if !rerun
-        && done_for.as_deref() == Some(endpoint.as_str())
-        && apply::git_repository_ready(&target_client)
-            .await
-            .unwrap_or(false)
-    {
+    let healthy = apply::git_repository_ready(&target_client)
+        .await
+        .unwrap_or(false);
+    if !rerun && healthy {
+        if done_for.as_deref() != Some(endpoint.as_str()) {
+            // Flux already runs there (bootstrapped by someone else, or before this cluster was claimed): adopt it as
+            // it is rather than re-applying over a live installation. The rerun annotation forces a bootstrap.
+            mark_bootstrapped(&ctx, &obj, &endpoint).await?;
+            info!(kind = %t.kind, %name, %endpoint, "Flux already running; adopted");
+            record(
+                &ctx,
+                &obj,
+                EventType::Normal,
+                "Adopted",
+                format!(
+                    "Flux already running in {endpoint} with a Ready GitRepository; left as it is"
+                ),
+            )
+            .await;
+        }
         return Ok(Action::requeue(Duration::from_secs(600)));
     }
     info!(kind = %t.kind, %name, %endpoint, rerun, "bootstrapping Flux");
@@ -190,20 +204,7 @@ async fn reconcile(obj: Arc<DynamicObject>, ctx: Arc<Ctx>) -> Result<Action, Err
     apply::apply_all(&target_client, &objs).await?;
     apply::wait_git_repository(&target_client, Duration::from_secs(300)).await?;
 
-    // Record on the claim; drop the rerun annotation
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_err(anyhow::Error::from)?
-        .as_secs();
-    let api: Api<DynamicObject> = Api::namespaced_with(
-        ctx.client.clone(),
-        obj.namespace().as_deref().unwrap_or("default"),
-        &ctx.ar,
-    );
-    let patch = serde_json::json!({"metadata": {"annotations": {ANN_BOOTSTRAPPED: format!("{endpoint}@{now}"), ANN_RERUN: serde_json::Value::Null}}});
-    api.patch(&name, &PatchParams::default(), &Patch::Merge(&patch))
-        .await
-        .map_err(anyhow::Error::from)?;
+    mark_bootstrapped(&ctx, &obj, &endpoint).await?;
     info!(kind = %t.kind, %name, %endpoint, objects = objs.len(), "Flux bootstrapped");
     record(
         &ctx,
@@ -217,6 +218,26 @@ async fn reconcile(obj: Arc<DynamicObject>, ctx: Arc<Ctx>) -> Result<Action, Err
     )
     .await;
     Ok(Action::requeue(Duration::from_secs(600)))
+}
+
+/// Record on the claim which cluster (endpoint) Flux was bootstrapped into, and drop the rerun annotation.
+async fn mark_bootstrapped(ctx: &Ctx, obj: &DynamicObject, endpoint: &str) -> Result<()> {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)?
+        .as_secs();
+    let api: Api<DynamicObject> = Api::namespaced_with(
+        ctx.client.clone(),
+        obj.namespace().as_deref().unwrap_or("default"),
+        &ctx.ar,
+    );
+    let patch = serde_json::json!({"metadata": {"annotations": {ANN_BOOTSTRAPPED: format!("{endpoint}@{now}"), ANN_RERUN: serde_json::Value::Null}}});
+    api.patch(
+        &obj.name_any(),
+        &PatchParams::default(),
+        &Patch::Merge(&patch),
+    )
+    .await?;
+    Ok(())
 }
 
 fn error_policy(obj: Arc<DynamicObject>, err: &Error, ctx: Arc<Ctx>) -> Action {

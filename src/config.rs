@@ -55,10 +55,26 @@ pub struct Git {
     /// `app_id` and `app_installation_id` must then be set here, since they are not secret.
     #[serde(default)]
     pub app_key_secret_manager: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "opt_string_or_number")]
     pub app_id: Option<String>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "opt_string_or_number")]
     pub app_installation_id: Option<String>,
+}
+
+/// Numeric IDs arrive as YAML numbers once a templating step drops the quotes (Helm toYaml, Flux substitution).
+fn opt_string_or_number<'de, D: serde::Deserializer<'de>>(
+    d: D,
+) -> std::result::Result<Option<String>, D::Error> {
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum V {
+        S(String),
+        N(u64),
+    }
+    Ok(Option::<V>::deserialize(d)?.map(|v| match v {
+        V::S(s) => s,
+        V::N(n) => n.to_string(),
+    }))
 }
 fn default_branch() -> String {
     "main".into()
@@ -150,7 +166,7 @@ mod tests {
 git:
   repository: microscaler/gcp-infrastructure
   app_key_secret_manager: projects/pw-ctl/secrets/flux-github-app-key
-  app_id: "5097671"
+  app_id: 5097671
   app_installation_id: "165490781"
 targets:
   - api_version: platform.pricewhisperer.ai/v1alpha1
@@ -167,6 +183,8 @@ targets:
             c.git.app_key_secret_manager.as_deref(),
             Some("projects/pw-ctl/secrets/flux-github-app-key")
         );
+        assert_eq!(c.git.app_id.as_deref(), Some("5097671"));
+        assert_eq!(c.git.app_installation_id.as_deref(), Some("165490781"));
         assert_eq!(c.targets[0].ready_condition, "Ready");
         assert_eq!(c.workdir, "/var/lib/igniteflux/repo");
     }
