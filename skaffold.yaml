@@ -14,16 +14,13 @@ build:
     - image: ghcr.io/octopilot/igniteflux-chart
       context: chart/chartTemplate
       buildpacks:
-        builder: ghcr.io/octopilot/builder-jammy-base:rust-builder-c3c756a
+        builder: ghcr.io/octopilot/builder-jammy-base:rust-builder-d741287
     - image: ghcr.io/octopilot/igniteflux
       context: .
       buildpacks:
-        # rust-builder-c3c756a == :latest (octopilot/rust 0.1.14, lifecycle 0.21.22).
-        # rust-builder-d5eb42a is rust 0.1.6 and declares no processes. Do not pin :latest.
-        # Policy: octopilot-pipeline-tools/docs/image-launch-and-builder-tags.md
-        builder: ghcr.io/octopilot/builder-jammy-base:rust-builder-c3c756a
+        # rust-builder-d741287 == :latest (octopilot/rust 0.1.15). One bin, so no BP_RUST_BINARY_NAME.
+        builder: ghcr.io/octopilot/builder-jammy-base:rust-builder-d741287
         runImage: ghcr.io/octopilot/igniteflux-base:latest
         env:
-          - BP_RUST_BINARY_NAME=igniteflux
           - BP_TEST_COMMAND=./hack/test-unit.sh
           - BP_TEST_LABEL=unit

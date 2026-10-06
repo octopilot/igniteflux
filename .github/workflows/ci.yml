@@ -27,7 +27,7 @@ jobs:
       integration: true
       integration_max_parallel: 4
       # op:latest, op:main, and op:v1.1.2 are different digests. Stay on latest until
-      # pipeline-tools main is rebuilt from builder rust-builder-c3c756a and op:main
+      # pipeline-tools main is rebuilt from builder rust-builder-d741287 and op:main
       # moves; then pin main or the next release. See
       # octopilot-pipeline-tools/docs/image-launch-and-builder-tags.md.
       op_version: latest
