@@ -3,7 +3,8 @@
 # exist, so the expected outcome is a BootstrapFailed event (Bootstrapped on a cluster that really has it). Either event
 # proves watch, config, RBAC and the ready-gate; no event within the timeout fails the test.
 # The test pod is the only hook: its ServiceAccount and Role are ordinary release objects, because helm test --logs
-# fetches logs for every test hook by name and fails on hooks that are not Pods.
+# fetches logs for every test hook by name after it ran: hooks that are not Pods, or a Pod already deleted on success
+# (hook-succeeded), fail it. The Pod is kept until the next test run replaces it.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -36,7 +37,7 @@ kind: Pod
 metadata:
   name: {{ include "igniteflux.name" . }}-test-reconcile
   namespace: {{ .Release.Namespace }}
-  annotations: { "helm.sh/hook": test, "helm.sh/hook-delete-policy": "before-hook-creation,hook-succeeded" }
+  annotations: { "helm.sh/hook": test, "helm.sh/hook-delete-policy": before-hook-creation }
 spec:
   serviceAccountName: {{ include "igniteflux.name" . }}-test
   restartPolicy: Never
