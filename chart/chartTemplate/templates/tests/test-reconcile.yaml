@@ -2,19 +2,19 @@
 # helm test: the controller must notice a Ready BootstrapProbe and act on it. The probe points at a cluster that does not
 # exist, so the expected outcome is a BootstrapFailed event (Bootstrapped on a cluster that really has it). Either event
 # proves watch, config, RBAC and the ready-gate; no event within the timeout fails the test.
+# The test pod is the only hook: its ServiceAccount and Role are ordinary release objects, because helm test --logs
+# fetches logs for every test hook by name and fails on hooks that are not Pods.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: {{ include "igniteflux.name" . }}-test
   namespace: {{ .Release.Namespace }}
-  annotations: { "helm.sh/hook": test, "helm.sh/hook-weight": "-5", "helm.sh/hook-delete-policy": "before-hook-creation,hook-succeeded" }
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: {{ include "igniteflux.name" . }}-test
   namespace: {{ .Release.Namespace }}
-  annotations: { "helm.sh/hook": test, "helm.sh/hook-weight": "-5", "helm.sh/hook-delete-policy": "before-hook-creation,hook-succeeded" }
 rules:
   - apiGroups: [igniteflux.octopilot.io]
     resources: [bootstrapprobes]
@@ -28,7 +28,6 @@ kind: RoleBinding
 metadata:
   name: {{ include "igniteflux.name" . }}-test
   namespace: {{ .Release.Namespace }}
-  annotations: { "helm.sh/hook": test, "helm.sh/hook-weight": "-5", "helm.sh/hook-delete-policy": "before-hook-creation,hook-succeeded" }
 roleRef: { apiGroup: rbac.authorization.k8s.io, kind: Role, name: {{ include "igniteflux.name" . }}-test }
 subjects: [{ kind: ServiceAccount, name: {{ include "igniteflux.name" . }}-test, namespace: {{ .Release.Namespace }} }]
 ---
