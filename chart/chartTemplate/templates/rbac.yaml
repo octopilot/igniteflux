@@ -14,7 +14,8 @@ rules:
   - apiGroups: [""]
     resources: [secrets]
     verbs: [get, list, watch]
-  - apiGroups: [""]
+  # kube-rs publishes events.k8s.io/v1 Events
+  - apiGroups: ["", "events.k8s.io"]
     resources: [events]
     verbs: [create, patch]
 ---

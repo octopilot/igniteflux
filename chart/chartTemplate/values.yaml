@@ -16,6 +16,11 @@ config:
   git:
     repository: microscaler/gcp-infrastructure
     branch: main
+    # On a cluster without a secret sync (e.g. the ephemeral bootstrap cluster), read the App key from Secret Manager
+    # with the pod's Workload Identity instead of appSecret:
+    # app_key_secret_manager: projects/pw-ctl/secrets/flux-github-app-key
+    # app_id: "5097671"
+    # app_installation_id: "165490781"
   targets:
     - api_version: platform.pricewhisperer.ai/v1alpha1
       kind: HubCluster

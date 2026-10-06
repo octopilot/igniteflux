@@ -65,8 +65,23 @@ fn condition_true(claim: &serde_json::Value, ty: &str) -> bool {
         .unwrap_or(false)
 }
 
-async fn load_app(client: &Client, namespace: &str, name: &str) -> Result<github::App> {
-    let s = Api::<Secret>::namespaced(client.clone(), namespace)
+/// The GitHub App: key from Secret Manager (via Workload Identity) when configured, otherwise from the Secret.
+async fn load_app(ctx: &Ctx, token: &str) -> Result<github::App> {
+    let git = &ctx.cfg.git;
+    if let Some(secret) = &git.app_key_secret_manager {
+        return Ok(github::App {
+            app_id: git
+                .app_id
+                .clone()
+                .ok_or_else(|| anyhow!("git.app_id is required with app_key_secret_manager"))?,
+            installation_id: git.app_installation_id.clone().ok_or_else(|| {
+                anyhow!("git.app_installation_id is required with app_key_secret_manager")
+            })?,
+            private_key_pem: gke::secret_manager_latest(&ctx.http, token, secret).await?,
+        });
+    }
+    let (namespace, name) = (&ctx.namespace, &git.app_secret);
+    let s = Api::<Secret>::namespaced(ctx.client.clone(), namespace)
         .get(name)
         .await
         .with_context(|| format!("secret {namespace}/{name}"))?;
@@ -96,6 +111,13 @@ async fn reconcile(obj: Arc<DynamicObject>, ctx: Arc<Ctx>) -> Result<Action, Err
         return Ok(Action::requeue(Duration::from_secs(60)));
     }
 
+    let env = t
+        .env_field
+        .as_deref()
+        .map(|f| config::resolve(f, &claim))
+        .transpose()?
+        .unwrap_or_default();
+
     // Where is the cluster?
     let token = gke::access_token(&ctx.http).await?;
     let (gke_info, endpoint) = match &t.cluster {
@@ -107,9 +129,9 @@ async fn reconcile(obj: Arc<DynamicObject>, ctx: Arc<Ctx>) -> Result<Action, Err
             let g = gke::describe(
                 &ctx.http,
                 &token,
-                &config::resolve(project, &claim)?,
-                &config::resolve(location, &claim)?,
-                &config::resolve(cname, &claim)?,
+                &config::resolve_in(project, &claim, &name, &env)?,
+                &config::resolve_in(location, &claim, &name, &env)?,
+                &config::resolve_in(cname, &claim, &name, &env)?,
             )
             .await?;
             if g.status != "RUNNING" {
@@ -148,7 +170,7 @@ async fn reconcile(obj: Arc<DynamicObject>, ctx: Arc<Ctx>) -> Result<Action, Err
     .await;
 
     // Git checkout as the App, rendered with kustomize
-    let app = load_app(&ctx.client, &ctx.namespace, &ctx.cfg.git.app_secret).await?;
+    let app = load_app(&ctx, &token).await?;
     let gh_token = app.installation_token(&ctx.http).await?;
     let workdir = PathBuf::from(&ctx.cfg.workdir);
     let public = format!("https://github.com/{}.git", ctx.cfg.git.repository);
@@ -160,13 +182,7 @@ async fn reconcile(obj: Arc<DynamicObject>, ctx: Arc<Ctx>) -> Result<Action, Err
             &ctx.cfg.git.branch,
         )
     })?;
-    let env = t
-        .env_field
-        .as_deref()
-        .map(|f| config::resolve(f, &claim))
-        .transpose()?
-        .unwrap_or_default();
-    let dir = workdir.join(t.path.replace("{name}", &name).replace("{env}", &env));
+    let dir = workdir.join(config::expand(&t.path, &name, &env));
     let objs = tokio::task::block_in_place(|| apply::render(&dir))?;
 
     // Apply, credential, wait
@@ -212,6 +228,23 @@ fn error_policy(obj: Arc<DynamicObject>, err: &Error, ctx: Arc<Ctx>) -> Action {
     Action::requeue(Duration::from_secs(60))
 }
 
+/// Block until the API server serves `gvk`, then return its resource (with the real plural and scope).
+async fn wait_for_kind(client: &Client, gvk: &GroupVersionKind) -> ApiResource {
+    let mut logged = false;
+    loop {
+        match kube::discovery::pinned_kind(client, gvk).await {
+            Ok((ar, _caps)) => return ar,
+            Err(e) => {
+                if !logged {
+                    info!(kind = %gvk.kind, group = %gvk.group, error = %e, "kind not served yet; waiting for its CRD");
+                    logged = true;
+                }
+                tokio::time::sleep(Duration::from_secs(30)).await;
+            }
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::fmt()
@@ -236,31 +269,39 @@ async fn main() -> Result<()> {
             .split_once('/')
             .map(|(g, v)| (g.to_string(), v.to_string()))
             .unwrap_or(("".into(), target.api_version.clone()));
-        let ar = ApiResource::from_gvk(&GroupVersionKind::gvk(&group, &version, &target.kind));
-        let api: Api<DynamicObject> = Api::all_with(client.clone(), &ar);
-        let ctx = Arc::new(Ctx {
-            client: client.clone(),
-            http: http.clone(),
-            cfg: cfg.clone(),
-            target: target.clone(),
-            namespace: namespace.clone(),
-            ar: ar.clone(),
-            recorder: Recorder::new(
-                client.clone(),
-                Reporter {
-                    controller: "igniteflux".into(),
-                    instance: None,
-                },
-            ),
-        });
-        let ctrl = Controller::new_with(api, watcher::Config::default(), ar)
-            .run(reconcile, error_policy, ctx)
-            .for_each(|r| async move {
-                if let Err(e) = r {
-                    error!(error = ?e, "controller error");
-                }
+        let gvk = GroupVersionKind::gvk(&group, &version, &target.kind);
+        let client = client.clone();
+        let (http, cfg, namespace) = (http.clone(), cfg.clone(), namespace.clone());
+        runs.push(tokio::spawn(async move {
+            // The claim's CRD may not exist yet (Crossplane installs it after igniteflux starts): wait for the kind
+            // to be served instead of failing every list with a 404.
+            let ar = wait_for_kind(&client, &gvk).await;
+            let api: Api<DynamicObject> = Api::all_with(client.clone(), &ar);
+            let ctx = Arc::new(Ctx {
+                client: client.clone(),
+                http: http.clone(),
+                cfg: cfg.clone(),
+                target: target.clone(),
+                namespace: namespace.clone(),
+                ar: ar.clone(),
+                recorder: Recorder::new(
+                    client.clone(),
+                    Reporter {
+                        controller: "igniteflux".into(),
+                        instance: None,
+                    },
+                ),
             });
-        runs.push(tokio::spawn(ctrl));
+            info!(kind = %gvk.kind, "watching");
+            Controller::new_with(api, watcher::Config::default(), ar)
+                .run(reconcile, error_policy, ctx)
+                .for_each(|r| async move {
+                    if let Err(e) = r {
+                        error!(error = ?e, "controller error");
+                    }
+                })
+                .await
+        }));
     }
     futures::future::join_all(runs).await;
     Ok(())

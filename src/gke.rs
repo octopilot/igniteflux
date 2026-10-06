@@ -28,6 +28,38 @@ pub async fn access_token(http: &reqwest::Client) -> Result<String> {
 }
 
 #[derive(Deserialize)]
+struct SecretPayload {
+    data: String,
+}
+#[derive(Deserialize)]
+struct SecretVersion {
+    payload: SecretPayload,
+}
+
+/// Latest version of a Secret Manager secret (`projects/<p>/secrets/<name>`), as text.
+pub async fn secret_manager_latest(
+    http: &reqwest::Client,
+    token: &str,
+    secret: &str,
+) -> Result<String> {
+    use base64::Engine as _;
+    let url = format!("https://secretmanager.googleapis.com/v1/{secret}/versions/latest:access");
+    let v: SecretVersion = http
+        .get(url)
+        .bearer_auth(token)
+        .send()
+        .await?
+        .error_for_status()
+        .with_context(|| format!("secretmanager access {secret}"))?
+        .json()
+        .await?;
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(v.payload.data)
+        .context("secret payload is not base64")?;
+    Ok(String::from_utf8(bytes)?)
+}
+
+#[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct MasterAuth {
     cluster_ca_certificate: String,
