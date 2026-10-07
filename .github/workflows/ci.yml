@@ -22,7 +22,7 @@ jobs:
       packages: write
       id-token: write
       pull-requests: write
-    uses: octopilot/actions/.github/workflows/pipeline.yml@main
+    uses: octopilot/actions/.github/workflows/pipeline.yml@v1.0.0
     with:
       integration: true
       integration_max_parallel: 4
